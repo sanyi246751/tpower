@@ -14,17 +14,13 @@ async def convert_coords():
         await page.goto("https://www.sunriver.com.tw/taiwanmap/grid_taipower_convert.php")
 
         for code in power_codes:
-            # 清除並輸入電力座標
-            await page.fill("#source", code)
-            # 點擊轉換按鈕
-            await page.click("input[value='轉換']")
+            await page.fill('input[name="source"]', code)
+            await page.click('input[value="轉換"]')
+            await page.wait_for_timeout(1500)  # 等轉換結果出現
 
-            # 等待轉換結果出現
-            await page.wait_for_timeout(1000)  # 等一秒確保結果出現
-
-            # 擷取轉換後經緯度
-            result = await page.input_value("#dest")
-            print(f"{code} → {result}")
+            lat = await page.input_value('input[name="dest_lat"]')
+            lon = await page.input_value('input[name="dest_lon"]')
+            print(f"{code} → 緯度: {lat}, 經度: {lon}")
 
         await browser.close()
 
