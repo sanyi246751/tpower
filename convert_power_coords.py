@@ -1,8 +1,7 @@
 from selenium import webdriver
+from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
-from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.chrome.options import Options
-from webdriver_manager.chrome import ChromeDriverManager
 import time
 import csv
 
@@ -12,12 +11,16 @@ power_coords = [
     "G6898DA34"
 ]
 
+# 🧩 指定 options
 options = Options()
-options.add_argument("--headless")  # 如果你在 Codespaces 可以先不用加這行看 debug
+options.add_argument("--headless")
 options.add_argument("--no-sandbox")
 options.add_argument("--disable-dev-shm-usage")
+options.binary_location = "/usr/bin/chromium-browser"
 
-driver = webdriver.Chrome(ChromeDriverManager().install(), options=options)
+# 🧩 使用已安裝的 chromium-chromedriver
+service = Service("/usr/lib/chromium-browser/chromedriver")
+driver = webdriver.Chrome(service=service, options=options)
 
 results = []
 
@@ -29,10 +32,9 @@ for coord in power_coords:
     input_box.clear()
     input_box.send_keys(coord)
 
-    # 模擬按下「轉換」按鈕
     convert_button = driver.find_element(By.XPATH, '//input[@type="submit" and @value="轉換"]')
     convert_button.click()
-    time.sleep(1.5)  # 等待網頁回應（視網路速度調整）
+    time.sleep(2)
 
     try:
         lat = driver.find_element(By.NAME, "dest_lat").get_attribute("value")
@@ -45,7 +47,6 @@ for coord in power_coords:
 
 driver.quit()
 
-# 儲存結果
 with open("電力座標轉換結果.csv", "w", newline="", encoding="utf-8-sig") as f:
     writer = csv.writer(f)
     writer.writerow(["電力座標", "緯度(WGS84)", "經度(WGS84)"])
