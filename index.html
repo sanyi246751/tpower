@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>桿號地圖示範 (最大放大至22，底圖可模糊放大)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.Default.css" />
+  <style>
+    html, body, #map {
+      height: 100%;
+      margin: 0;
+      padding: 0;
+    }
+    /* 搜尋區容器 */
+    #search {
+      position: absolute;
+      top: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 1000;
+      background: white;
+      padding: 8px 12px;
+      border-radius: 8px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      width: 280px;  /* 整體寬度 */
+    }
+    /* 包裹輸入框及建議清單，方便建議清單定位 */
+    #searchInputContainer {
+      position: relative;
+      flex-grow: 1;
+    }
+    #searchInput {
+      font-size: 16px;
+      padding: 4px 8px;
+      width: 100%;
+      box-sizing: border-box;
+    }
+    #search button {
+      padding: 6px 12px;
+      font-size: 16px;
+      cursor: pointer;
+      background-color: #0078d7;
+      border: none;
+      color: white;
+      border-radius: 4px;
+    }
+    #search button:hover {
+      background-color: #005aab;
+    }
+    /* 建議清單 */
+    #suggestions {
+      position: absolute;
+      background: white;
+      max-height: 150px;
+      overflow-y: auto;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      width: 100%;
+      top: 38px; /* 輸入框高度約30 + padding */
+      left: 0;
+      z-index: 1100;
+      display: none;
+      box-sizing: border-box;
+    }
+    .suggestion-item {
+      padding: 4px 8px;
+      cursor: pointer;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .suggestion-item:hover {
+      background-color: #0078d7;
+      color: white;
+    }
+    .custom-label {
+      background: #0078d7;
+      color: white;
+      padding: 3px 7px;
+      border-radius: 4px;
+      font-weight: bold;
+      white-space: nowrap;
+      pointer-events: none;
+      font-size: 14px;
+    }
+    .marker-cluster div {
+      border-radius: 50%;
+      text-align: center;
+      color: white;
+      font-weight: bold;
+    }
+    .marker-cluster-small div {
+      background-color: rgba(0, 150, 255, 0.6);
+      width: 30px;
+      height: 30px;
+      line-height: 30px;
+    }
+    .marker-cluster-medium div {
+      background-color: rgba(255, 165, 0, 0.6);
+      width: 40px;
+      height: 40px;
+      line-height: 40px;
+    }
+    .marker-cluster-large div {
+      background-color: rgba(255, 69, 0, 0.6);
+      width: 50px;
+      height: 50px;
+      line-height: 50px;
+    }
+    /* popup 內街景按鈕 */
+    .popup-btn {
+      margin-top: 6px;
+      padding: 4px 8px;
+      cursor: pointer;
+      background-color: #0078d7;
+      border: none;
+      color: white;
+      border-radius: 4px;
+      font-size: 14px;
+    }
+    .popup-btn:hover {
+      background-color: #005aab;
+    }
+  </style>
+</head>
+<body>
+  <div id="search">
+    <div id="searchInputContainer">
+      <input id="searchInput" placeholder="搜尋桿號或圖號…" autocomplete="off" />
+      <div id="suggestions"></div>
+    </div>
+    <button onclick="searchMarker()">搜尋</button>
+  </div>
+  <div id="map"></div>
+
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet.markercluster/dist/leaflet.markercluster.js"></script>
+
+  <script>
+    const osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; OpenStreetMap contributors',
+      maxZoom: 22,
+      maxNativeZoom: 19
+    });
+
+    const esriSat = L.tileLayer(
+      'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', 
+      {
+        attribution: 'Tiles &copy; Esri &mdash; Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community',
+        maxNativeZoom: 17,
+        maxZoom: 22
+      }
+    );
+
+    const map = L.map('map', {
+      center: [24.41292825471928, 120.77028377259873],
+      zoom: 13,
+      maxZoom: 22,
+      layers: [osm]
+    });
+
+    const baseMaps = {
+      "🗺 OpenStreetMap": osm,
+      "🛰 空照衛星 (Esri)": esriSat
+    };
+    L.control.layers(baseMaps).addTo(map);
+
+    const markerClusterGroup = L.markerClusterGroup({
+      maxClusterRadius: 50,
+      iconCreateFunction: function(cluster) {
+        const count = cluster.getChildCount();
+        let size = 'small';
+        if (count >= 20 && count < 50) size = 'medium';
+        else if (count >= 50) size = 'large';
+
+        return L.divIcon({
+          html: `<div><span>${count}</span></div>`,
+          className: `marker-cluster marker-cluster-${size}`,
+          iconSize: L.point(40, 40)
+        });
+      }
+    });
+
+    const markers = [];
+
+    function onGoogleData(data) {
+      const rows = data.table.rows;
+      rows.forEach(row => {
+        const c = row.c;
+        if (!c) return;
+
+        const town = c[0]?.v || '';
+        const coord = (c[1]?.v || '').toString();
+        const pole = (c[2]?.v || '').toString();
+        const lat = parseFloat(c[3]?.v);
+        const lng = parseFloat(c[4]?.v);
+        if (isNaN(lat) || isNaN(lng)) return;
+
+        const labelText = pole || coord;
+
+        const icon = L.divIcon({
+          className: 'custom-label',
+          html: labelText,
+          iconSize: null
+        });
+
+        const marker = L.marker([lat, lng], { icon });
+
+        marker.bindPopup(`
+          <b>${labelText}</b><br>
+          鄉里：${town}<br>
+          圖號座標：${coord}<br>
+          桿號：${pole || '無'}<br>
+          座標：${lat.toFixed(6)}, ${lng.toFixed(6)}<br>
+          <button class="popup-btn" onclick="showStreetView(${lat}, ${lng})">查看街景</button>
+        `);
+
+        markerClusterGroup.addLayer(marker);
+        markers.push({
+          marker,
+          pole: pole.toLowerCase(),
+          coord: coord.toLowerCase()
+        });
+      });
+
+      map.addLayer(markerClusterGroup);
+
+      if (markerClusterGroup.getLayers().length > 0) {
+        map.fitBounds(markerClusterGroup.getBounds(), {
+          padding: [20, 20],
+          maxZoom: 17
+        });
+      }
+    }
+
+    function searchMarker() {
+      const keyword = document.getElementById('searchInput').value.trim().toLowerCase();
+      if (!keyword) {
+        alert('請輸入搜尋關鍵字');
+        return;
+      }
+      const found = markers.find(m => m.pole.includes(keyword) || m.coord.includes(keyword));
+      if (found) {
+        map.setView(found.marker.getLatLng(), 22);
+        found.marker.openPopup();
+        clearSuggestions();
+      } else {
+        alert('找不到符合的桿號或圖號');
+      }
+    }
+
+    function showStreetView(lat, lng) {
+      const url = `https://www.google.com/maps?q=&layer=c&cbll=${lat},${lng}`;
+      window.open(url, '_blank', 'width=800,height=600');
+    }
+
+    const searchInput = document.getElementById('searchInput');
+    const suggestions = document.getElementById('suggestions');
+
+    searchInput.addEventListener('input', () => {
+      const val = searchInput.value.trim().toLowerCase();
+      if (!val) {
+        clearSuggestions();
+        return;
+      }
+      const filtered = markers.filter(m => m.pole.includes(val) || m.coord.includes(val));
+      if (filtered.length === 0) {
+        clearSuggestions();
+        return;
+      }
+      suggestions.innerHTML = filtered.slice(0, 10).map(m => {
+        const label = m.pole || m.coord;
+        return `<div class="suggestion-item">${label}</div>`;
+      }).join('');
+      suggestions.style.display = 'block';
+
+      Array.from(suggestions.children).forEach((el, i) => {
+        el.onclick = () => {
+          const m = filtered[i];
+          map.setView(m.marker.getLatLng(), 22);
+          m.marker.openPopup();
+          clearSuggestions();
+          searchInput.value = '';
+        };
+      });
+    });
+
+    function clearSuggestions() {
+      suggestions.innerHTML = '';
+      suggestions.style.display = 'none';
+    }
+
+    document.addEventListener('click', (e) => {
+      if (!document.getElementById('search').contains(e.target)) {
+        clearSuggestions();
+      }
+    });
+
+    searchInput.addEventListener('keypress', function(e) {
+      if (e.key === 'Enter') {
+        searchMarker();
+        clearSuggestions();
+      }
+    });
+  </script>
+
+  <script src="https://docs.google.com/spreadsheets/d/1Gisr7iKdnGwV90sDi9o1FAFRqxlFEDQn1RlvLtBHOlo/gviz/tq?sheet=工作表1&tqx=out:json;responseHandler:onGoogleData"></script>
+</body>
+</html>
