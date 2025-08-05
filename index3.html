@@ -1,8 +1,8 @@
 <!DOCTYPE html>
-<html lang="zh-TW">
+<html>
 <head>
   <meta charset="utf-8" />
-  <title>台電電桿位置查詢</title>
+  <title>桿號地圖示範 (最大放大至22，底圖可模糊放大)</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.css" />
@@ -13,6 +13,7 @@
       margin: 0;
       padding: 0;
     }
+    /* 搜尋區容器 */
     #search {
       position: absolute;
       top: 10px;
@@ -26,8 +27,9 @@
       display: flex;
       gap: 8px;
       align-items: center;
-      width: 280px;
+      width: 280px;  /* 整體寬度 */
     }
+    /* 包裹輸入框及建議清單，方便建議清單定位 */
     #searchInputContainer {
       position: relative;
       flex-grow: 1;
@@ -50,6 +52,7 @@
     #search button:hover {
       background-color: #005aab;
     }
+    /* 建議清單 */
     #suggestions {
       position: absolute;
       background: white;
@@ -57,13 +60,12 @@
       overflow-y: auto;
       border: 1px solid #ccc;
       border-radius: 4px;
-      width: 280px; /* 與輸入框同寬 */
-      top: 38px;
+      width: 100%;
+      top: 38px; /* 輸入框高度約30 + padding */
       left: 0;
       z-index: 1100;
       display: none;
       box-sizing: border-box;
-      box-shadow: 0 4px 8px rgba(0,0,0,0.15);
     }
     .suggestion-item {
       padding: 4px 8px;
@@ -75,6 +77,16 @@
     .suggestion-item:hover {
       background-color: #0078d7;
       color: white;
+    }
+    .custom-label {
+      background: #0078d7;
+      color: white;
+      padding: 3px 7px;
+      border-radius: 4px;
+      font-weight: bold;
+      white-space: nowrap;
+      pointer-events: none;
+      font-size: 14px;
     }
     .marker-cluster div {
       border-radius: 50%;
@@ -100,6 +112,7 @@
       height: 50px;
       line-height: 50px;
     }
+    /* popup 內街景按鈕 */
     .popup-btn {
       margin-top: 6px;
       padding: 4px 8px;
@@ -112,54 +125,6 @@
     }
     .popup-btn:hover {
       background-color: #005aab;
-    }
-
-    /* 自繪電桿圖示 */
-    .custom-pole-icon {
-      position: relative;
-      width: 8px;
-      height: 32px;
-      background-color: #444;
-      border-radius: 2px;
-    }
-    .custom-pole-icon::before {
-      content: "";
-      position: absolute;
-      top: 4px;
-      left: -10px;
-      width: 28px;
-      height: 2px;
-      background-color: #888;
-    }
-    .custom-pole-icon::after {
-      content: "";
-      position: absolute;
-      top: 6px;
-      left: 2px;
-      width: 4px;
-      height: 4px;
-      background-color: yellow;
-      border-radius: 50%;
-    }
-    .custom-pole-icon-label {
-      position: absolute;
-      top: -30px;
-      left: 50%;
-      transform: translateX(-50%);
-      background: none;
-      padding: 2px 6px;
-      font-size: 12px;
-      border-radius: 4px;
-      font-weight: bold;
-      white-space: nowrap;
-      pointer-events: none;
-      user-select: none;
-    }
-
-    /* popup 內容字體及寬度 */
-    .leaflet-popup-content {
-      font-size: 14px;
-      max-width: 280px;
     }
   </style>
 </head>
@@ -186,14 +151,14 @@
     const esriSat = L.tileLayer(
       'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', 
       {
-        attribution: 'Tiles &copy; Esri',
+        attribution: 'Tiles &copy; Esri &mdash; Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community',
         maxNativeZoom: 17,
         maxZoom: 22
       }
     );
 
     const map = L.map('map', {
-      center: [24.4129, 120.7703],
+      center: [24.41292825471928, 120.77028377259873],
       zoom: 13,
       maxZoom: 22,
       layers: [osm]
@@ -239,14 +204,9 @@
         const labelText = pole || coord;
 
         const icon = L.divIcon({
-          className: '',
-          html: `
-            <div class="custom-pole-icon">
-              <div class="custom-pole-icon-label">${labelText}</div>
-            </div>
-          `,
-          iconSize: [32, 32],
-          iconAnchor: [16, 16]
+          className: 'custom-label',
+          html: labelText,
+          iconSize: null
         });
 
         const marker = L.marker([lat, lng], { icon });
@@ -258,7 +218,7 @@
           桿號：${pole || '無'}<br>
           座標：${lat.toFixed(6)}, ${lng.toFixed(6)}<br>
           <button class="popup-btn" onclick="showStreetView(${lat}, ${lng})">查看街景</button>
-        `, { offset: L.point(-13, -30) });
+        `);
 
         markerClusterGroup.addLayer(marker);
         markers.push({
@@ -289,7 +249,6 @@
         map.setView(found.marker.getLatLng(), 22);
         found.marker.openPopup();
         clearSuggestions();
-        document.getElementById('searchInput').value = '';  // 清空輸入欄
       } else {
         alert('找不到符合的桿號或圖號');
       }
@@ -323,10 +282,10 @@
       Array.from(suggestions.children).forEach((el, i) => {
         el.onclick = () => {
           const m = filtered[i];
-          searchInput.value = m.pole || m.coord;
           map.setView(m.marker.getLatLng(), 22);
           m.marker.openPopup();
           clearSuggestions();
+          searchInput.value = '';
         };
       });
     });

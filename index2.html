@@ -13,6 +13,8 @@
       margin: 0;
       padding: 0;
     }
+
+    /* 🔍 搜尋框樣式 */
     #search {
       position: absolute;
       top: 10px;
@@ -50,6 +52,7 @@
     #search button:hover {
       background-color: #005aab;
     }
+
     #suggestions {
       position: absolute;
       background: white;
@@ -57,7 +60,7 @@
       overflow-y: auto;
       border: 1px solid #ccc;
       border-radius: 4px;
-      width: 280px; /* 與輸入框同寬 */
+      width: 280px;
       top: 38px;
       left: 0;
       z-index: 1100;
@@ -76,6 +79,8 @@
       background-color: #0078d7;
       color: white;
     }
+
+    /* 🧲 群組 Cluster 樣式 */
     .marker-cluster div {
       border-radius: 50%;
       text-align: center;
@@ -100,6 +105,74 @@
       height: 50px;
       line-height: 50px;
     }
+
+    /* 📍 自繪電桿圖示 - 改良版 */
+    .custom-pole-icon {
+      position: relative;
+      width: 6px;
+      height: 40px;
+      background-color: #5b5b5b;
+      border-radius: 2px;
+      margin: auto;
+      box-shadow: 0 0 1px #222;
+    }
+    .custom-pole-icon::before,
+    .custom-pole-icon::after {
+      content: "";
+      position: absolute;
+      left: 50%;
+      width: 30px;
+      height: 2px;
+      background-color: #888;
+      transform: translateX(-50%);
+    }
+    .custom-pole-icon::before {
+      top: 8px;
+    }
+    .custom-pole-icon::after {
+      top: 16px;
+    }
+    .crossbar {
+      position: absolute;
+      top: 24px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 24px;
+      height: 2px;
+      background-color: #aaa;
+    }
+    .insulator {
+      position: absolute;
+      width: 4px;
+      height: 4px;
+      background-color: yellow;
+      border-radius: 50%;
+      left: 1px;
+      top: 3px;
+      box-shadow: 0 8px yellow;
+    }
+    .custom-pole-icon-label {
+      position: absolute;
+      top: -20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(255, 255, 255, 0.8);
+      padding: 2px 6px;
+      font-size: 12px;
+      border-radius: 4px;
+      font-weight: bold;
+      white-space: nowrap;
+      pointer-events: none;
+      user-select: none;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+    }
+
+    /* popup 內容字體及寬度 */
+    .leaflet-popup-content {
+      font-size: 14px;
+      max-width: 280px;
+    }
+
     .popup-btn {
       margin-top: 6px;
       padding: 4px 8px;
@@ -112,54 +185,6 @@
     }
     .popup-btn:hover {
       background-color: #005aab;
-    }
-
-    /* 自繪電桿圖示 */
-    .custom-pole-icon {
-      position: relative;
-      width: 8px;
-      height: 32px;
-      background-color: #444;
-      border-radius: 2px;
-    }
-    .custom-pole-icon::before {
-      content: "";
-      position: absolute;
-      top: 4px;
-      left: -10px;
-      width: 28px;
-      height: 2px;
-      background-color: #888;
-    }
-    .custom-pole-icon::after {
-      content: "";
-      position: absolute;
-      top: 6px;
-      left: 2px;
-      width: 4px;
-      height: 4px;
-      background-color: yellow;
-      border-radius: 50%;
-    }
-    .custom-pole-icon-label {
-      position: absolute;
-      top: -30px;
-      left: 50%;
-      transform: translateX(-50%);
-      background: none;
-      padding: 2px 6px;
-      font-size: 12px;
-      border-radius: 4px;
-      font-weight: bold;
-      white-space: nowrap;
-      pointer-events: none;
-      user-select: none;
-    }
-
-    /* popup 內容字體及寬度 */
-    .leaflet-popup-content {
-      font-size: 14px;
-      max-width: 280px;
     }
   </style>
 </head>
@@ -243,10 +268,12 @@
           html: `
             <div class="custom-pole-icon">
               <div class="custom-pole-icon-label">${labelText}</div>
+              <div class="crossbar"></div>
+              <div class="insulator"></div>
             </div>
           `,
-          iconSize: [32, 32],
-          iconAnchor: [16, 16]
+          iconSize: [24, 48],
+          iconAnchor: [12, 48]
         });
 
         const marker = L.marker([lat, lng], { icon });
@@ -289,7 +316,7 @@
         map.setView(found.marker.getLatLng(), 22);
         found.marker.openPopup();
         clearSuggestions();
-        document.getElementById('searchInput').value = '';  // 清空輸入欄
+        document.getElementById('searchInput').value = '';
       } else {
         alert('找不到符合的桿號或圖號');
       }
