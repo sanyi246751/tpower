@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="utf-8" />
+  <title>台電電桿位置查詢（opensheet.vercel.app 版）</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.Default.css" />
+  <style>
+    html, body, #map {
+      height: 100%;
+      margin: 0; padding: 0;
+    }
+    #search {
+      position: absolute;
+      top: 10px; left: 50%;
+      transform: translateX(-50%);
+      z-index: 1000;
+      background: white;
+      padding: 8px 12px;
+      border-radius: 8px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      width: 280px;
+    }
+    #searchInputContainer {
+      position: relative;
+      flex-grow: 1;
+    }
+    #searchInput {
+      font-size: 16px;
+      padding: 4px 8px;
+      width: 100%;
+      box-sizing: border-box;
+    }
+    #search button {
+      padding: 6px 12px;
+      font-size: 16px;
+      cursor: pointer;
+      background-color: #0078d7;
+      border: none;
+      color: white;
+      border-radius: 4px;
+    }
+    #search button:hover {
+      background-color: #005aab;
+    }
+    #suggestions {
+      position: absolute;
+      background: white;
+      max-height: 150px;
+      overflow-y: auto;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      width: 280px;
+      top: 38px;
+      left: 0;
+      z-index: 1100;
+      display: none;
+      box-sizing: border-box;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+    }
+    .suggestion-item {
+      padding: 4px 8px;
+      cursor: pointer;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .suggestion-item:hover {
+      background-color: #0078d7;
+      color: white;
+    }
+    .marker-cluster div {
+      border-radius: 50%;
+      text-align: center;
+      color: white;
+      font-weight: bold;
+    }
+    .marker-cluster-small div {
+      background-color: rgba(0, 150, 255, 0.6);
+      width: 30px; height: 30px;
+      line-height: 30px;
+    }
+    .marker-cluster-medium div {
+      background-color: rgba(255, 165, 0, 0.6);
+      width: 40px; height: 40px;
+      line-height: 40px;
+    }
+    .marker-cluster-large div {
+      background-color: rgba(255, 69, 0, 0.6);
+      width: 50px; height: 50px;
+      line-height: 50px;
+    }
+    .custom-pole-icon {
+      position: relative;
+      width: 6px;
+      height: 40px;
+      background-color: #5b5b5b;
+      border-radius: 2px;
+      margin: auto;
+      box-shadow: 0 0 1px #222;
+    }
+    .custom-pole-icon::before,
+    .custom-pole-icon::after {
+      content: "";
+      position: absolute;
+      left: 50%;
+      width: 30px;
+      height: 2px;
+      background-color: #888;
+      transform: translateX(-50%);
+    }
+    .custom-pole-icon::before {
+      top: 8px;
+    }
+    .custom-pole-icon::after {
+      top: 16px;
+    }
+    .crossbar {
+      position: absolute;
+      top: 24px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 24px;
+      height: 2px;
+      background-color: #aaa;
+    }
+    .insulator {
+      position: absolute;
+      width: 4px;
+      height: 4px;
+      background-color: yellow;
+      border-radius: 50%;
+      left: 1px;
+      top: 3px;
+      box-shadow: 0 8px yellow;
+    }
+    .custom-pole-icon-label {
+      position: absolute;
+      top: -20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(255, 255, 255, 0.8);
+      padding: 2px 6px;
+      font-size: 12px;
+      border-radius: 4px;
+      font-weight: bold;
+      white-space: nowrap;
+      pointer-events: none;
+      user-select: none;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+    }
+    .leaflet-popup-content {
+      font-size: 14px;
+      max-width: 280px;
+    }
+    .popup-btn {
+      margin-top: 6px;
+      padding: 4px 8px;
+      cursor: pointer;
+      background-color: #0078d7;
+      border: none;
+      color: white;
+      border-radius: 4px;
+      font-size: 14px;
+    }
+    .popup-btn:hover {
+      background-color: #005aab;
+    }
+  </style>
+</head>
+<body>
+  <div id="search">
+    <div id="searchInputContainer">
+      <input id="searchInput" placeholder="搜尋桿號或圖號…" autocomplete="off" />
+      <div id="suggestions"></div>
+    </div>
+    <button onclick="searchMarker()">搜尋</button>
+  </div>
+  <div id="map"></div>
+
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet.markercluster/dist/leaflet.markercluster.js"></script>
+
+  <script>
+    const SHEET_ID = "1Gisr7iKdnGwV90sDi9o1FAFRqxlFEDQn1RlvLtBHOlo";
+    // 預設讀第一個工作表，名稱不指定（可改成encodeURIComponent('工作表1')）
+    const SHEET_NAME = encodeURIComponent('工作表1'); 
+    const sheetUrl = `https://opensheet.vercel.app/${SHEET_ID}/${SHEET_NAME}`;
+
+    const osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; OpenStreetMap contributors',
+      maxZoom: 22,
+      maxNativeZoom: 19
+    });
+
+    const esriSat = L.tileLayer(
+      'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', 
+      {
+        attribution: 'Tiles &copy; Esri',
+        maxNativeZoom: 17,
+        maxZoom: 22
+      }
+    );
+
+    const map = L.map('map', {
+      center: [24.4129, 120.7703],
+      zoom: 13,
+      maxZoom: 22,
+      layers: [osm]
+    });
+
+    const baseMaps = {
+      "🗺 OpenStreetMap": osm,
+      "🛰 空照衛星 (Esri)": esriSat
+    };
+    L.control.layers(baseMaps).addTo(map);
+
+    const markerClusterGroup = L.markerClusterGroup({
+      maxClusterRadius: 50,
+      iconCreateFunction: function(cluster) {
+        const count = cluster.getChildCount();
+        let size = 'small';
+        if (count >= 20 && count < 50) size = 'medium';
+        else if (count >= 50) size = 'large';
+
+        return L.divIcon({
+          html: `<div><span>${count}</span></div>`,
+          className: `marker-cluster marker-cluster-${size}`,
+          iconSize: L.point(40, 40)
+        });
+      }
+    });
+
+    const markers = [];
+
+    function loadData() {
+      fetch(sheetUrl)
+        .then(res => res.json())
+        .then(data => {
+          // data 是陣列，每筆物件代表一列
+          data.forEach(row => {
+            // 依照你表格欄位名修改這邊欄位對應
+            // 例如工作表欄位名：鄉里, 圖號座標, 桿號, 緯度, 經度
+            const town = row["鄉里"] || "";
+            const coord = row["圖號座標"] || "";
+            const pole = row["桿號"] || "";
+            const lat = parseFloat(row["緯度"]);
+            const lng = parseFloat(row["經度"]);
+            if (isNaN(lat) || isNaN(lng)) return;
+
+            const labelText = pole || coord;
+
+            const icon = L.divIcon({
+              className: '',
+              html: `
+                <div class="custom-pole-icon">
+                  <div class="custom-pole-icon-label">${labelText}</div>
+                  <div class="crossbar"></div>
+                  <div class="insulator"></div>
+                </div>
+              `,
+              iconSize: [24, 48],
+              iconAnchor: [12, 48]
+            });
+
+            const marker = L.marker([lat, lng], { icon });
+
+            marker.bindPopup(`
+              <b>${labelText}</b><br>
+              鄉里：${town}<br>
+              圖號座標：${coord}<br>
+              桿號：${pole || '無'}<br>
+              座標：${lat.toFixed(6)}, ${lng.toFixed(6)}<br>
+              <button class="popup-btn" onclick="showStreetView(${lat}, ${lng})">查看街景</button>
+            `, { offset: L.point(-13, -30) });
+
+            markerClusterGroup.addLayer(marker);
+            markers.push({
+              marker,
+              pole: pole.toLowerCase(),
+              coord: coord.toLowerCase()
+            });
+          });
+
+          map.addLayer(markerClusterGroup);
+
+          if (markerClusterGroup.getLayers().length > 0) {
+            map.fitBounds(markerClusterGroup.getBounds(), {
+              padding: [20, 20],
+              maxZoom: 17
+            });
+          }
+        })
+        .catch(err => {
+          alert("資料讀取失敗，請確認 Google Sheets 是否公開並允許存取");
+          console.error(err);
+        });
+    }
+
+    function searchMarker() {
+      const keyword = document.getElementById('searchInput').value.trim().toLowerCase();
+      if (!keyword) {
+        alert('請輸入搜尋關鍵字');
+        return;
+      }
+      const found = markers.find(m => m.pole.includes(keyword) || m.coord.includes(keyword));
+      if (found) {
+        map.setView(found.marker.getLatLng(), 22);
+        found.marker.openPopup();
+        clearSuggestions();
+        document.getElementById('searchInput').value = '';
+      } else {
+        alert('找不到符合的桿號或圖號');
+      }
+    }
+
+    function showStreetView(lat, lng) {
+      const url = `https://www.google.com/maps?q=&layer=c&cbll=${lat},${lng}`;
+      window.open(url, '_blank', 'width=800,height=600');
+    }
+
+    const searchInput = document.getElementById('searchInput');
+    const suggestions = document.getElementById('suggestions');
+
+    searchInput.addEventListener('input', () => {
+      const val = searchInput.value.trim().toLowerCase();
+      if (!val) {
+        clearSuggestions();
+        return;
+      }
+      const filtered = markers.filter(m => m.pole.includes(val) || m.coord.includes(val));
+      if (filtered.length === 0) {
+        clearSuggestions();
+        return;
+      }
+      suggestions.innerHTML = filtered.slice(0, 10).map(m => {
+        const label = m.pole || m.coord;
+        return `<div class="suggestion-item">${label}</div>`;
+      }).join('');
+      suggestions.style.display = 'block';
+
+      Array.from(suggestions.children).forEach((el, i) => {
+        el.onclick = () => {
+          const m = filtered[i];
+          searchInput.value = m.pole || m.coord;
+          map.setView(m.marker.getLatLng(), 22);
+          m.marker.openPopup();
+          clearSuggestions();
+        };
+      });
+    });
+
+    function clearSuggestions() {
+      suggestions.innerHTML = '';
+      suggestions.style.display = 'none';
+    }
+
+    document.addEventListener('click', (e) => {
+      if (!document.getElementById('search').contains(e.target)) {
+        clearSuggestions();
+      }
+    });
+
+    searchInput.addEventListener('keypress', function(e) {
+      if (e.key === 'Enter') {
+        searchMarker();
+        clearSuggestions();
+      }
+    });
+
+    loadData();
+  </script>
+</body>
+</html>
