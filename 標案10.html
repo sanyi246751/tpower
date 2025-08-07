@@ -2,7 +2,7 @@
 <html lang="zh-Hant">
 <head>
   <meta charset="UTF-8" />
-  <title>標案分箱工具 - 自動箱號版本（含雲端儲存）</title>
+  <title>標案分箱工具 - 雲端版</title>
   <style>
     body { font-family: sans-serif; padding: 20px; }
     select, button, input { margin: 5px 5px 5px 0; padding: 5px; }
@@ -49,7 +49,7 @@
 </head>
 <body>
 
-<h2>標案分箱工具（自動編號 + 雲端儲存）</h2>
+<h2>標案分箱工具（雲端版）</h2>
 
 <div class="top-controls">
   <div class="label-group">
@@ -76,23 +76,20 @@
 </div>
 
 <div style="margin-top:20px;">
-  <button id="saveBtn" style="padding:10px 15px;">儲存分箱結果（雲端）</button>
-  <button id="loadBtn" style="padding:10px 15px; margin-left:10px;">載入分箱結果（雲端）</button>
-  <button id="exportBtn" style="padding:10px 15px; margin-left:10px;">匯出分箱結果</button>
+  <button id="exportBtn" style="padding:10px 15px;">匯出分箱結果</button>
   <button id="showBoxDetailsBtn" style="margin-left: 10px; padding:10px 15px;">列出箱號內容</button>
   <button id="printPreviewBtn" style="margin-left: 10px; padding:10px 15px;">列印預覽</button>
   <button id="printAllBtn" style="margin-left: 10px; padding:10px 15px;">全部列印</button>
+  <button id="saveCloudBtn" style="margin-left: 10px; padding:10px 15px;">保存到雲端</button>
+  <button id="loadCloudBtn" style="margin-left: 10px; padding:10px 15px;">從雲端載入</button>
 </div>
 
 <div id="boxDetails"></div>
 <iframe id="printFrame" style="display:none;"></iframe>
 
 <script>
-const GAS_API_URL = "https://script.google.com/macros/s/你的部署ID/exec";  // <-- 改成你的 Apps Script 網路應用 URL
-const SHEET_ID = "1LI0r1gbH0Ao2b1O6GfuwQFaje55_G4v4rqZwHpkJmD0"; // 你的試算表ID
-
-// 用 opensheet.vercel.app 讀取標案資料，格式： https://opensheet.vercel.app/試算表ID/標案資料
-const sheetURL = `https://opensheet.vercel.app/${SHEET_ID}/標案資料`;
+const SHEET_URL = "https://opensheet.vercel.app/1LI0r1gbH0Ao2b1O6GfuwQFaje55_G4v4rqZwHpkJmD0/標案資料";
+const GAS_API_URL = "https://script.google.com/macros/s/AKfycbzzn2bXPiuqMle11lt61PL_5v_FjxKIZZ94DGYbND_jF5GfxYh708hs-wahX3yL2o_V/exec";
 
 const yearSelect = document.getElementById("yearSelect");
 const boxSelect = document.getElementById("boxSelect");
@@ -100,26 +97,25 @@ const projectList = document.getElementById("projectList");
 const boxContent = document.getElementById("boxContent");
 const addBoxBtn = document.getElementById("addBoxBtn");
 const delBoxBtn = document.getElementById("delBoxBtn");
-const saveBtn = document.getElementById("saveBtn");
-const loadBtn = document.getElementById("loadBtn");
 const exportBtn = document.getElementById("exportBtn");
 const showBoxDetailsBtn = document.getElementById("showBoxDetailsBtn");
 const printPreviewBtn = document.getElementById("printPreviewBtn");
 const printAllBtn = document.getElementById("printAllBtn");
+const saveCloudBtn = document.getElementById("saveCloudBtn");
+const loadCloudBtn = document.getElementById("loadCloudBtn");
 const boxDetailsDiv = document.getElementById("boxDetails");
-const printFrame = document.getElementById("printFrame");
 
 const yearData = {};
 const boxAssignments = {};
 
+// 載入年度標案資料
 async function loadSheetData() {
   try {
-    const res = await fetch(sheetURL);
+    const res = await fetch(SHEET_URL);
     const raw = await res.json();
 
     const keys = raw.length > 0 ? Object.keys(raw[0]) : [];
 
-    // 解析年度欄位名，建立空陣列
     keys.forEach(key => {
       const year = key.trim();
       if (year.match(/^\d{3,}年$/)) {
@@ -127,7 +123,6 @@ async function loadSheetData() {
       }
     });
 
-    // 將標案加入對應年度陣列
     raw.forEach(row => {
       for (const key in row) {
         const year = key.trim();
@@ -138,15 +133,7 @@ async function loadSheetData() {
       }
     });
 
-    // 填充年度下拉選單
-    Object.keys(yearData).forEach(year => {
-      const opt = document.createElement("option");
-      opt.value = year;
-      opt.textContent = year;
-      yearSelect.appendChild(opt);
-    });
-
-    // 預設每個年度有3個箱號
+    // 預設給每年三個空箱號
     Object.keys(yearData).forEach(year => {
       for (let i = 1; i <= 3; i++) {
         const boxId = `${year}-${i}`;
@@ -154,18 +141,31 @@ async function loadSheetData() {
       }
     });
 
-    refreshBoxSelect();
+    refreshYearSelect();
 
-    if (Object.keys(yearData).length > 0) {
-      yearSelect.value = Object.keys(yearData)[0];
-    }
-
-    updateProjectList();
-    updateBoxContent();
   } catch (e) {
     alert("讀取 Google Sheets 資料失敗，請檢查連線與權限。");
     console.error(e);
   }
+}
+
+function refreshYearSelect() {
+  yearSelect.innerHTML = "";
+  Object.keys(yearData).forEach(year => {
+    const opt = document.createElement("option");
+    opt.value = year;
+    opt.textContent = year;
+    yearSelect.appendChild(opt);
+  });
+
+  if (yearSelect.options.length > 0) {
+    yearSelect.value = yearSelect.options[0].value;
+  }
+
+  refreshBoxSelect();
+  updateProjectList();
+  updateBoxContent();
+  boxDetailsDiv.textContent = "";
 }
 
 function refreshBoxSelect() {
@@ -195,19 +195,11 @@ function updateProjectList() {
   const year = yearSelect.value;
   const projects = yearData[year] || [];
 
-  // 過濾已分配的標案(不在任何箱號中)
-  const assignedProjects = new Set();
-  for (const box in boxAssignments) {
-    boxAssignments[box].forEach(p => assignedProjects.add(p));
-  }
-
   projectList.innerHTML = "";
   projects.forEach(p => {
-    if (!assignedProjects.has(p)) {
-      const li = document.createElement("li");
-      li.textContent = p;
-      projectList.appendChild(li);
-    }
+    const li = document.createElement("li");
+    li.textContent = p;
+    projectList.appendChild(li);
   });
 }
 
@@ -223,15 +215,14 @@ function updateBoxContent() {
   });
 }
 
+// 點擊項目，從年度標案移入箱號
 projectList.addEventListener("click", e => {
   if (e.target.tagName === "LI") {
     const project = e.target.textContent;
     const year = yearSelect.value;
     const box = boxSelect.value;
 
-    // 從年度移除，加入箱號
     yearData[year] = yearData[year].filter(p => p !== project);
-    if (!boxAssignments[box]) boxAssignments[box] = [];
     boxAssignments[box].push(project);
 
     updateProjectList();
@@ -239,14 +230,13 @@ projectList.addEventListener("click", e => {
   }
 });
 
+// 點擊箱號內項目，退回年度標案
 boxContent.addEventListener("click", e => {
   if (e.target.tagName === "LI") {
     const project = e.target.textContent;
     const year = yearSelect.value;
     const box = boxSelect.value;
 
-    // 從箱號移除，放回年度
-    if (!yearData[year]) yearData[year] = [];
     boxAssignments[box] = boxAssignments[box].filter(p => p !== project);
     yearData[year].push(project);
 
@@ -267,6 +257,7 @@ boxSelect.addEventListener("change", () => {
   boxDetailsDiv.textContent = "";
 });
 
+// 新增箱號
 addBoxBtn.addEventListener("click", () => {
   const year = yearSelect.value;
   const currentBoxes = Object.keys(boxAssignments)
@@ -283,6 +274,7 @@ addBoxBtn.addEventListener("click", () => {
   updateBoxContent();
 });
 
+// 刪除箱號
 delBoxBtn.addEventListener("click", () => {
   const year = yearSelect.value;
   const currentBoxes = Object.keys(boxAssignments)
@@ -299,11 +291,11 @@ delBoxBtn.addEventListener("click", () => {
     return;
   }
 
+  // 取最大號箱號刪除
   const { id: boxId } = currentBoxes[0];
 
   if (boxAssignments[boxId].length > 0) {
     boxAssignments[boxId].forEach(p => {
-      if (!yearData[year]) yearData[year] = [];
       yearData[year].push(p);
     });
   }
@@ -315,71 +307,7 @@ delBoxBtn.addEventListener("click", () => {
   boxDetailsDiv.textContent = "";
 });
 
-saveBtn.addEventListener("click", () => {
-  fetch(GAS_API_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ boxAssignments })
-  })
-  .then(res => res.json())
-  .then(data => {
-    if (data.status === "success") {
-      alert("保存成功！");
-    } else {
-      alert("保存失敗：" + data.message);
-    }
-  })
-  .catch(e => {
-    alert("保存時發生錯誤，請稍後再試");
-    console.error(e);
-  });
-});
-
-loadBtn.addEventListener("click", () => {
-  fetch(GAS_API_URL)
-    .then(res => res.json())
-    .then(data => {
-      if (data.status === "success") {
-        // 覆寫 boxAssignments，並重新整理顯示
-        for (const key in boxAssignments) {
-          delete boxAssignments[key];
-        }
-        Object.assign(boxAssignments, data.boxAssignments);
-
-        // 從 boxAssignments 回推 yearData 裡的標案，移除已分配的
-        // 先重建 yearData 原始清單 (從標案資料讀取)
-        for (const year in yearData) {
-          yearData[year] = [];
-        }
-
-        // 重新載入標案資料一次(從 Google Sheet)
-        loadSheetData().then(() => {
-          // 移除所有已分配標案
-          const assignedProjects = new Set();
-          for (const box in boxAssignments) {
-            boxAssignments[box].forEach(p => assignedProjects.add(p));
-          }
-
-          for (const year in yearData) {
-            yearData[year] = yearData[year].filter(p => !assignedProjects.has(p));
-          }
-
-          refreshBoxSelect();
-          updateProjectList();
-          updateBoxContent();
-          boxDetailsDiv.textContent = "";
-          alert("載入成功！");
-        });
-      } else {
-        alert("載入失敗：" + data.message);
-      }
-    })
-    .catch(e => {
-      alert("載入發生錯誤");
-      console.error(e);
-    });
-});
-
+// 匯出 CSV
 exportBtn.addEventListener("click", () => {
   let csvContent = "箱號,標案名稱\n";
   const sortedBoxes = Object.keys(boxAssignments).sort((a, b) => {
@@ -391,7 +319,7 @@ exportBtn.addEventListener("click", () => {
 
   sortedBoxes.forEach(boxId => {
     const projects = boxAssignments[boxId];
-    if (!projects || projects.length === 0) {
+    if (projects.length === 0) {
       csvContent += `"${boxId}",\n`;
     } else {
       projects.forEach(p => {
@@ -405,12 +333,14 @@ exportBtn.addEventListener("click", () => {
   const a = document.createElement("a");
   a.href = url;
   a.download = "分箱結果.csv";
+  a.style.display = "none";
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
 });
 
+// 顯示箱號內容
 showBoxDetailsBtn.addEventListener("click", () => {
   const box = boxSelect.value;
   if (!box) {
@@ -429,6 +359,7 @@ showBoxDetailsBtn.addEventListener("click", () => {
   }
 });
 
+// 列印預覽（單箱）
 printPreviewBtn.addEventListener("click", () => {
   const box = boxSelect.value;
   if (!box) {
@@ -438,6 +369,7 @@ printPreviewBtn.addEventListener("click", () => {
   printBoxes([box]);
 });
 
+// 列印全部箱號
 printAllBtn.addEventListener("click", () => {
   const sortedBoxes = Object.keys(boxAssignments).sort((a, b) => {
     const [yA, nA] = a.split("-").map(x => isNaN(x) ? x : parseInt(x));
@@ -480,17 +412,70 @@ function printBoxes(boxArray) {
   });
 
   html += `</body></html>`;
-  const doc = printFrame.contentWindow.document;
+  const frame = document.getElementById("printFrame");
+  const doc = frame.contentWindow.document;
   doc.open(); doc.write(html); doc.close();
-  printFrame.onload = () => {
-    printFrame.contentWindow.focus();
-    printFrame.contentWindow.print();
+  frame.onload = () => {
+    frame.contentWindow.focus();
+    frame.contentWindow.print();
   };
 }
 
+// 雲端保存
+saveCloudBtn.addEventListener("click", async () => {
+  saveCloudBtn.disabled = true;
+  saveCloudBtn.textContent = "保存中...";
+  try {
+    const res = await fetch(GAS_API_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ boxAssignments }),
+    });
+    const result = await res.json();
+    if (result.status === "success") {
+      alert("保存成功！");
+    } else {
+      alert("保存失敗：" + (result.message || "未知錯誤"));
+    }
+  } catch (e) {
+    alert("保存時發生錯誤，請稍後再試");
+    console.error(e);
+  } finally {
+    saveCloudBtn.disabled = false;
+    saveCloudBtn.textContent = "保存到雲端";
+  }
+});
+
+// 從雲端載入
+loadCloudBtn.addEventListener("click", async () => {
+  loadCloudBtn.disabled = true;
+  loadCloudBtn.textContent = "載入中...";
+  try {
+    const res = await fetch(GAS_API_URL);
+    const result = await res.json();
+    if (result.status === "success") {
+      Object.keys(result.boxAssignments).forEach(boxId => {
+        boxAssignments[boxId] = result.boxAssignments[boxId];
+      });
+      refreshBoxSelect();
+      updateProjectList();
+      updateBoxContent();
+      boxDetailsDiv.textContent = "已從雲端載入分箱資料。";
+    } else {
+      alert("載入失敗：" + (result.message || "未知錯誤"));
+    }
+  } catch (e) {
+    alert("載入時發生錯誤，請稍後再試");
+    console.error(e);
+  } finally {
+    loadCloudBtn.disabled = false;
+    loadCloudBtn.textContent = "從雲端載入";
+  }
+});
+
+// 頁面載入時執行
 loadSheetData();
 
 </script>
-
 </body>
 </html>
