@@ -89,7 +89,8 @@
 
 <script>
 const SHEET_URL = "https://opensheet.vercel.app/1LI0r1gbH0Ao2b1O6GfuwQFaje55_G4v4rqZwHpkJmD0/標案資料";
-const GAS_API_URL = "https://script.google.com/macros/s/AKfycbzzn2bXPiuqMle11lt61PL_5v_FjxKIZZ94DGYbND_jF5GfxYh708hs-wahX3yL2o_V/exec";
+
+const GAS_API_URL = "https://script.google.com/macros/s/AKfycbzzn2bXPiuqMle11lt61PL_5v_FjxKIZZ94DGYbND_jF5GfxYh708hs-wahX3yL2o_V/exec"; // 改成你的 Apps Script 部署網址
 
 const yearSelect = document.getElementById("yearSelect");
 const boxSelect = document.getElementById("boxSelect");
@@ -108,7 +109,6 @@ const boxDetailsDiv = document.getElementById("boxDetails");
 const yearData = {};
 const boxAssignments = {};
 
-// 載入年度標案資料
 async function loadSheetData() {
   try {
     const res = await fetch(SHEET_URL);
@@ -130,14 +130,6 @@ async function loadSheetData() {
         if (yearData[year] && val && val.trim() !== "") {
           yearData[year].push(val.trim());
         }
-      }
-    });
-
-    // 預設給每年三個空箱號
-    Object.keys(yearData).forEach(year => {
-      for (let i = 1; i <= 3; i++) {
-        const boxId = `${year}-${i}`;
-        if (!boxAssignments[boxId]) boxAssignments[boxId] = [];
       }
     });
 
@@ -215,7 +207,6 @@ function updateBoxContent() {
   });
 }
 
-// 點擊項目，從年度標案移入箱號
 projectList.addEventListener("click", e => {
   if (e.target.tagName === "LI") {
     const project = e.target.textContent;
@@ -223,6 +214,7 @@ projectList.addEventListener("click", e => {
     const box = boxSelect.value;
 
     yearData[year] = yearData[year].filter(p => p !== project);
+    if (!boxAssignments[box]) boxAssignments[box] = [];
     boxAssignments[box].push(project);
 
     updateProjectList();
@@ -230,7 +222,6 @@ projectList.addEventListener("click", e => {
   }
 });
 
-// 點擊箱號內項目，退回年度標案
 boxContent.addEventListener("click", e => {
   if (e.target.tagName === "LI") {
     const project = e.target.textContent;
@@ -257,7 +248,6 @@ boxSelect.addEventListener("change", () => {
   boxDetailsDiv.textContent = "";
 });
 
-// 新增箱號
 addBoxBtn.addEventListener("click", () => {
   const year = yearSelect.value;
   const currentBoxes = Object.keys(boxAssignments)
@@ -274,7 +264,6 @@ addBoxBtn.addEventListener("click", () => {
   updateBoxContent();
 });
 
-// 刪除箱號
 delBoxBtn.addEventListener("click", () => {
   const year = yearSelect.value;
   const currentBoxes = Object.keys(boxAssignments)
@@ -291,10 +280,9 @@ delBoxBtn.addEventListener("click", () => {
     return;
   }
 
-  // 取最大號箱號刪除
-  const { id: boxId } = currentBoxes[0];
+  const { id: boxId } = currentBoxes[currentBoxes.length - 1];
 
-  if (boxAssignments[boxId].length > 0) {
+  if (boxAssignments[boxId] && boxAssignments[boxId].length > 0) {
     boxAssignments[boxId].forEach(p => {
       yearData[year].push(p);
     });
@@ -307,7 +295,6 @@ delBoxBtn.addEventListener("click", () => {
   boxDetailsDiv.textContent = "";
 });
 
-// 匯出 CSV
 exportBtn.addEventListener("click", () => {
   let csvContent = "箱號,標案名稱\n";
   const sortedBoxes = Object.keys(boxAssignments).sort((a, b) => {
@@ -319,7 +306,7 @@ exportBtn.addEventListener("click", () => {
 
   sortedBoxes.forEach(boxId => {
     const projects = boxAssignments[boxId];
-    if (projects.length === 0) {
+    if (!projects || projects.length === 0) {
       csvContent += `"${boxId}",\n`;
     } else {
       projects.forEach(p => {
@@ -340,7 +327,6 @@ exportBtn.addEventListener("click", () => {
   URL.revokeObjectURL(url);
 });
 
-// 顯示箱號內容
 showBoxDetailsBtn.addEventListener("click", () => {
   const box = boxSelect.value;
   if (!box) {
@@ -359,7 +345,6 @@ showBoxDetailsBtn.addEventListener("click", () => {
   }
 });
 
-// 列印預覽（單箱）
 printPreviewBtn.addEventListener("click", () => {
   const box = boxSelect.value;
   if (!box) {
@@ -369,7 +354,6 @@ printPreviewBtn.addEventListener("click", () => {
   printBoxes([box]);
 });
 
-// 列印全部箱號
 printAllBtn.addEventListener("click", () => {
   const sortedBoxes = Object.keys(boxAssignments).sort((a, b) => {
     const [yA, nA] = a.split("-").map(x => isNaN(x) ? x : parseInt(x));
@@ -392,39 +376,39 @@ function printBoxes(boxArray) {
       h1 { font-size: 24pt; font-weight: 900; text-align: center; margin: 0; padding-bottom: 4px; border-bottom: 2px solid #005a9e; color: #005a9e; letter-spacing: 1.5px; }
       .date { font-size: 14pt; color: #555; text-align: center; margin: 8px 0 16px 0; font-weight: 600; }
       h3 { font-size: 18pt; font-weight: 700; color: #003f72; margin-bottom: 25px; letter-spacing: 1.5px; }
-      ul { list-style-type: disc; padding-left: 50px; font-size: 17pt; line-height: 1.3; margin-top: 0; margin-bottom: 30px; word-break: break-word; }
-      ul li { margin-bottom: 8px; }
-      p.no-projects { font-size: 20pt; font-style: italic; color: #999; margin-bottom: 50px; text-align: center; }
-    </style></head><body>
+      ul { list-style: none; padding-left: 0; font-size: 16pt; }
+      li { margin: 6px 0; }
+    </style>
+    </head><body>
   `;
 
   boxArray.forEach(boxId => {
-    const projects = boxAssignments[boxId];
-    html += `<div class="page"><h1>苗栗縣三義鄉公所</h1><div class="date">列印日期：${today}</div><h3>箱號：${boxId}</h3>`;
-    if (!projects || projects.length === 0) {
-      html += `<p class="no-projects">（此箱無標案）</p>`;
-    } else {
-      html += `<ul>`;
-      projects.forEach(p => { html += `<li>${p}</li>`; });
-      html += `</ul>`;
-    }
+    html += `<div class="page">`;
+    html += `<h1>苗栗縣三義鄉公所</h1>`;
+    html += `<div class="date">列印日期：${today}</div>`;
+    html += `<h3>箱號：${boxId}</h3>`;
+    html += `<ul>`;
+    const projects = boxAssignments[boxId] || [];
+    projects.forEach(p => {
+      html += `<li>${p}</li>`;
+    });
+    html += `</ul>`;
     html += `</div>`;
   });
 
-  html += `</body></html>`;
-  const frame = document.getElementById("printFrame");
-  const doc = frame.contentWindow.document;
-  doc.open(); doc.write(html); doc.close();
-  frame.onload = () => {
-    frame.contentWindow.focus();
-    frame.contentWindow.print();
-  };
+  html += "</body></html>";
+
+  const printFrame = document.getElementById("printFrame");
+  const doc = printFrame.contentWindow.document;
+  doc.open();
+  doc.write(html);
+  doc.close();
+
+  printFrame.contentWindow.focus();
+  printFrame.contentWindow.print();
 }
 
-// 雲端保存
 saveCloudBtn.addEventListener("click", async () => {
-  saveCloudBtn.disabled = true;
-  saveCloudBtn.textContent = "保存中...";
   try {
     const res = await fetch(GAS_API_URL, {
       method: "POST",
@@ -432,50 +416,42 @@ saveCloudBtn.addEventListener("click", async () => {
       body: JSON.stringify({ boxAssignments }),
     });
     const result = await res.json();
+    console.log("後端回傳:", result);
     if (result.status === "success") {
       alert("保存成功！");
     } else {
-      alert("保存失敗：" + (result.message || "未知錯誤"));
+      alert("保存失敗，錯誤訊息：" + result.message);
     }
   } catch (e) {
-    alert("保存時發生錯誤，請稍後再試");
-    console.error(e);
-  } finally {
-    saveCloudBtn.disabled = false;
-    saveCloudBtn.textContent = "保存到雲端";
+    alert("連線失敗：" + e.message);
   }
 });
 
-// 從雲端載入
 loadCloudBtn.addEventListener("click", async () => {
-  loadCloudBtn.disabled = true;
-  loadCloudBtn.textContent = "載入中...";
   try {
     const res = await fetch(GAS_API_URL);
     const result = await res.json();
+    console.log("從雲端載入資料:", result);
     if (result.status === "success") {
-      Object.keys(result.boxAssignments).forEach(boxId => {
-        boxAssignments[boxId] = result.boxAssignments[boxId];
-      });
+      Object.keys(boxAssignments).forEach(k => delete boxAssignments[k]);
+      Object.assign(boxAssignments, result.boxAssignments || {});
       refreshBoxSelect();
       updateProjectList();
       updateBoxContent();
-      boxDetailsDiv.textContent = "已從雲端載入分箱資料。";
+      boxDetailsDiv.textContent = "";
+      alert("載入成功！");
     } else {
-      alert("載入失敗：" + (result.message || "未知錯誤"));
+      alert("載入失敗，錯誤訊息：" + result.message);
     }
   } catch (e) {
-    alert("載入時發生錯誤，請稍後再試");
-    console.error(e);
-  } finally {
-    loadCloudBtn.disabled = false;
-    loadCloudBtn.textContent = "從雲端載入";
+    alert("連線失敗：" + e.message);
   }
 });
 
-// 頁面載入時執行
-loadSheetData();
-
+window.onload = () => {
+  loadSheetData();
+};
 </script>
+
 </body>
 </html>
